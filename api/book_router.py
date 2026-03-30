@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, status, Query, Request
 from typing import List, Optional
 from uuid import UUID
 
-from schemas.book import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
-from services.book import BookService
-from repository.book import BookRepository
+from schemas.book_schemas import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
+from services.book_service import BookService
+from repository.book_repo import BookRepository
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 

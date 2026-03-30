@@ -1,8 +1,8 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
-from repository.book import BookRepository
-from schemas.book import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
+from repository.book_repo import BookRepository
+from schemas.book_schemas import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
 
 class BookService:
     def __init__(self, repository: BookRepository):

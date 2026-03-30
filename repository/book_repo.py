@@ -2,8 +2,8 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from schemas.book import BookStatus
-from models.book import Book
+from schemas.book_schemas import BookStatus
+from models.book_model import Book
 
 class BookRepository:
     def __init__(self, session: AsyncSession):

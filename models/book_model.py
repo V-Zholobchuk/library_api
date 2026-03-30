@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Enum as SQLEnum, String, Integer, Uuid
 from database import Base
-from schemas.book import BookStatus
+from schemas.book_schemas import BookStatus
 
 class Book(Base):
     __tablename__ = "books"

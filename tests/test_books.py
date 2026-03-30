@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from main import app
 from database import get_db, Base
-from schemas.book import BookStatus
+from schemas.book_schemas import BookStatus
 
 TEST_DATABASE_URL = "sqlite+aiosqlite://"
 engine_test = create_async_engine(
@@ -116,16 +116,13 @@ async def test_filter_and_sort_books(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_pagination(async_client: AsyncClient):
-    # Додаємо 5 книг
     for i in range(5):
         await async_client.post("/books/", json={"title": f"Book {i}", "author": "Author", "year": 2000+i})
         
-    # Skip=2, limit=2 
     resp = await async_client.get("/books/?skip=2&limit=2&sort_by=year")
     assert resp.status_code == 200
     data = resp.json()
     
-    # Головне: ми маємо бачити `total` = 5, хоча повертається лише 2 елементи
     assert data["total"] == 5
     assert data["skip"] == 2
     assert data["limit"] == 2
@@ -133,6 +130,5 @@ async def test_pagination(async_client: AsyncClient):
     assert data["items"][0]["title"] == "Book 2"
     assert data["items"][1]["title"] == "Book 3"
     
-    # Перевіримо, чи з'явились лінки
     assert "skip=4" in data["next_url"]
     assert "skip=0" in data["prev_url"]
