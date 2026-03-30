@@ -24,7 +24,6 @@ class BookRepository:
         if author:
             base_query = base_query.where(Book.author == author)
             
-        # Рахуємо загальну кількість
         count_query = select(func.count(Book.id))
         if status:
             count_query = count_query.where(Book.status == status)
@@ -40,7 +39,6 @@ class BookRepository:
         elif sort_by == 'year':
             query = query.order_by(Book.year)
             
-        # Реалізація Limit-Offset пагінації
         query = query.offset(skip).limit(limit)
         
         result = await self.session.execute(query)
