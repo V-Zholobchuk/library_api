@@ -1,33 +1,52 @@
-from typing import List, Dict, Optional
-from uuid import UUID, uuid4
+from typing import List, Optional
+from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 from schemas.book import BookStatus
-from models.book import books_db
+from models.book import Book
 
 class BookRepository:
-    def __init__(self):
-        # Посилання на наше in-memory "сховище"
-        self.books = books_db
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    async def get_all(self, status: Optional[BookStatus] = None, author: Optional[str] = None) -> List[Dict]:
-        result = self.books
+    async def get_all(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        status: Optional[BookStatus] = None, 
+        author: Optional[str] = None,
+        sort_by: Optional[str] = None
+    ) -> List[Book]:
+        query = select(Book)
+        
         if status:
-            result = [b for b in result if b["status"] == status]
+            query = query.where(Book.status == status)
         if author:
-            result = [b for b in result if b["author"].lower() == author.lower()]
-        return result
+            # Пошук за автором (точний збіг)
+            query = query.where(Book.author == author)
+            
+        if sort_by == 'title':
+            query = query.order_by(Book.title)
+        elif sort_by == 'year':
+            query = query.order_by(Book.year)
+            
+        # Реалізація Limit-Offset пагінації
+        query = query.offset(skip).limit(limit)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
-    async def get_by_id(self, book_id: UUID) -> Optional[Dict]:
-        for book in self.books:
-            if book["id"] == book_id:
-                return book
-        return None
+    async def get_by_id(self, book_id: UUID) -> Optional[Book]:
+        return await self.session.get(Book, book_id)
 
-    async def create(self, book_data: dict) -> dict:
-        book_dict = book_data.copy()
-        book_dict["id"] = uuid4()
-        self.books.append(book_dict)
-        return book_dict
+    async def create(self, book_data: dict) -> Book:
+        book = Book(**book_data)
+        self.session.add(book)
+        await self.session.commit()
+        await self.session.refresh(book)
+        return book
 
     async def delete(self, book_id: UUID) -> None:
-        # Модифікуємо список "на місці" (in-place), щоб зберегти посилання на `books_db`
-        self.books[:] = [book for book in self.books if book["id"] != book_id]
+        query = delete(Book).where(Book.id == book_id)
+        await self.session.execute(query)
+        await self.session.commit()

@@ -1,20 +1,48 @@
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from uuid import uuid4
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import StaticPool
 
-# Імпорт основного додатку та in-memory БД
 from main import app
-from models.book import books_db
+from database import get_db, Base
+from schemas.book import BookStatus
 
-client = TestClient(app)
+# Створюємо in-memory SQLite базу даних для ізольованого тестування
+TEST_DATABASE_URL = "sqlite+aiosqlite://"
+engine_test = create_async_engine(
+    TEST_DATABASE_URL, 
+    connect_args={"check_same_thread": False}, 
+    poolclass=StaticPool
+)
+TestingSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine_test, class_=AsyncSession)
 
-@pytest.fixture(autouse=True)
-def clear_db():
-    # Очищення бази даних перед кожним тестом для ізоляції
-    books_db.clear()
+async def override_get_db():
+    async with TestingSessionLocal() as session:
+        yield session
 
-def test_create_book():
-    response = client.post(
+# Підмінюємо залежність у FastAPI
+app.dependency_overrides[get_db] = override_get_db
+
+@pytest_asyncio.fixture(autouse=True)
+async def prepare_db():
+    # Перед кожним тестом створюємо таблиці з нуля
+    async with engine_test.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # Після тесту знищуємо
+    async with engine_test.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+@pytest_asyncio.fixture
+async def async_client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
+
+@pytest.mark.asyncio
+async def test_create_book(async_client: AsyncClient):
+    response = await async_client.post(
         "/books/",
         json={
             "title": "Кобзар",
@@ -32,68 +60,80 @@ def test_create_book():
     assert data["status"] == "наявні в бібліотеці"
     assert data["year"] == 1840
 
-def test_get_all_books():
-    client.post("/books/", json={"title": "Test1", "author": "A1", "year": 2020})
-    client.post("/books/", json={"title": "Test2", "author": "A2", "year": 2021})
+@pytest.mark.asyncio
+async def test_get_all_books(async_client: AsyncClient):
+    await async_client.post("/books/", json={"title": "Test1", "author": "A1", "year": 2020})
+    await async_client.post("/books/", json={"title": "Test2", "author": "A2", "year": 2021})
     
-    response = client.get("/books/")
+    response = await async_client.get("/books/")
     assert response.status_code == 200
     assert len(response.json()) == 2
 
-def test_get_book_by_id():
-    create_resp = client.post("/books/", json={"title": "Лісова пісня", "author": "Леся Українка", "year": 1911})
+@pytest.mark.asyncio
+async def test_get_book_by_id(async_client: AsyncClient):
+    create_resp = await async_client.post("/books/", json={"title": "Лісова пісня", "author": "Леся Українка", "year": 1911})
     book_id = create_resp.json()["id"]
 
-    response = client.get(f"/books/{book_id}")
+    response = await async_client.get(f"/books/{book_id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == book_id
     assert data["title"] == "Лісова пісня"
 
-def test_get_book_not_found():
+@pytest.mark.asyncio
+async def test_get_book_not_found(async_client: AsyncClient):
     random_id = str(uuid4())
-    response = client.get(f"/books/{random_id}")
+    response = await async_client.get(f"/books/{random_id}")
     assert response.status_code == 404
 
-def test_delete_book():
-    create_resp = client.post("/books/", json={"title": "Захар Беркут", "author": "Іван Франко", "year": 1883})
+@pytest.mark.asyncio
+async def test_delete_book(async_client: AsyncClient):
+    create_resp = await async_client.post("/books/", json={"title": "Захар Беркут", "author": "Іван Франко", "year": 1883})
     book_id = create_resp.json()["id"]
 
-    # Delete book
-    delete_resp = client.delete(f"/books/{book_id}")
+    delete_resp = await async_client.delete(f"/books/{book_id}")
     assert delete_resp.status_code == 204
 
-    # GET endpoint should now return 404
-    get_resp = client.get(f"/books/{book_id}")
+    get_resp = await async_client.get(f"/books/{book_id}")
     assert get_resp.status_code == 404
 
-    # Ідемпотентна операція: повторне видалення
-    delete_again_resp = client.delete(f"/books/{book_id}")
+    delete_again_resp = await async_client.delete(f"/books/{book_id}")
     assert delete_again_resp.status_code == 204
 
-def test_filter_and_sort_books():
-    client.post("/books/", json={"title": "C", "author": "Author1", "status": "наявні в бібліотеці", "year": 2000})
-    client.post("/books/", json={"title": "A", "author": "Author2", "status": "видані комусь", "year": 1990})
-    client.post("/books/", json={"title": "B", "author": "Author1", "status": "наявні в бібліотеці", "year": 2010})
+@pytest.mark.asyncio
+async def test_filter_and_sort_books(async_client: AsyncClient):
+    await async_client.post("/books/", json={"title": "C", "author": "Author1", "status": "наявні в бібліотеці", "year": 2000})
+    await async_client.post("/books/", json={"title": "A", "author": "Author2", "status": "видані комусь", "year": 1990})
+    await async_client.post("/books/", json={"title": "B", "author": "Author1", "status": "наявні в бібліотеці", "year": 2010})
 
-    # Фільтрація по автору
-    resp = client.get("/books/?author=Author1")
+    resp = await async_client.get("/books/?author=Author1")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
     assert all(b["author"] == "Author1" for b in resp.json())
 
-    # Фільтрація по статусу
-    resp2 = client.get("/books/?status=видані комусь")
+    resp2 = await async_client.get("/books/?status=видані комусь")
     assert resp2.status_code == 200
     assert len(resp2.json()) == 1
     assert resp2.json()[0]["title"] == "A"
 
-    # Сортування по title
-    resp3 = client.get("/books/?sort_by=title")
+    resp3 = await async_client.get("/books/?sort_by=title")
     titles = [b["title"] for b in resp3.json()]
     assert titles == ["A", "B", "C"]
 
-    # Сортування по year
-    resp4 = client.get("/books/?sort_by=year")
+    resp4 = await async_client.get("/books/?sort_by=year")
     years = [b["year"] for b in resp4.json()]
     assert years == [1990, 2000, 2010]
+
+@pytest.mark.asyncio
+async def test_pagination(async_client: AsyncClient):
+    # Додаємо 5 книг
+    for i in range(5):
+        await async_client.post("/books/", json={"title": f"Book {i}", "author": "Author", "year": 2000+i})
+        
+    # Skip=2, limit=2 -> має повернути Book 2 та Book 3
+    resp = await async_client.get("/books/?skip=2&limit=2&sort_by=year")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 2
+    assert data[0]["title"] == "Book 2"
+    assert data[1]["title"] == "Book 3"

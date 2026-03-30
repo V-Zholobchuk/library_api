@@ -10,31 +10,31 @@ class BookService:
 
     async def get_all_books(
         self, 
+        skip: int = 0,
+        limit: int = 10,
         status: Optional[BookStatus] = None, 
         author: Optional[str] = None,
         sort_by: Optional[str] = None
     ) -> List[BookResponse]:
-        books_data = await self.repository.get_all(status=status, author=author)
-        
-        # Сортування
-        if sort_by == 'title':
-            books_data.sort(key=lambda x: x["title"])
-        elif sort_by == 'year':
-            books_data.sort(key=lambda x: x["year"].__int__())
-            
-        return [BookResponse(**book) for book in books_data]
+        books = await self.repository.get_all(
+            skip=skip, 
+            limit=limit, 
+            status=status, 
+            author=author,
+            sort_by=sort_by
+        )
+        return [BookResponse.model_validate(book) for book in books]
 
     async def get_book_by_id(self, book_id: UUID) -> BookResponse:
         book_data = await self.repository.get_by_id(book_id)
         if not book_data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Книгу не знайдено")
-        return BookResponse(**book_data)
+        return BookResponse.model_validate(book_data)
 
     async def create_book(self, book: BookCreate) -> BookResponse:
         book_dict = book.model_dump()
         created_book = await self.repository.create(book_dict)
-        return BookResponse(**created_book)
+        return BookResponse.model_validate(created_book)
 
     async def delete_book(self, book_id: UUID) -> None:
-        # Виклик репозиторію; ідемпотентно: помилку не викидаємо, якщо книги вже немає
         await self.repository.delete(book_id)
