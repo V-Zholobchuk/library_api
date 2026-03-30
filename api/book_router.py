@@ -18,7 +18,7 @@ def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
 @router.get("/", response_model=PaginatedBookResponse, status_code=status.HTTP_200_OK)
 async def get_books(
     request: Request,
-    cursor: Optional[str] = Query(None, description="Курсор для пагінації (base64)"),
+    cursor: Optional[str] = Query(None, description="Курсор для пагінації"),
     limit: int = Query(10, ge=1, le=100, description="Пагінація: limit "),
     status: Optional[BookStatus] = Query(None, description="Фільтр по статусу"),
     author: Optional[str] = Query(None, description="Фільтр по автору"),

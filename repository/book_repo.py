@@ -37,7 +37,10 @@ class BookRepository:
             base_query = base_query.where(Book.author == author)
             
         count_query = select(func.count(Book.id))
-        count_query = count_query.select_from(base_query.subquery())
+        if status:
+            count_query = count_query.where(Book.status == status)
+        if author:
+            count_query = count_query.where(Book.author == author)
         
         total_result = await self.session.execute(count_query)
         total = total_result.scalar_one()
