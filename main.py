@@ -6,7 +6,6 @@ from api.book import router as book_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # При старті додатку створюємо таблиці, якщо їх немає
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

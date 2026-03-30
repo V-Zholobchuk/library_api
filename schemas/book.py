@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 from uuid import UUID
 
@@ -21,3 +21,9 @@ class BookResponse(BookBase):
     id: UUID
 
     model_config = ConfigDict(from_attributes=True)
+
+class PaginatedBookResponse(BaseModel):
+    total: int = Field(..., description="Загальна кількість книг, що відповідають запиту")
+    skip: int
+    limit: int
+    items: List[BookResponse]

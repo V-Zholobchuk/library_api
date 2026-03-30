@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, Query
 from typing import List, Optional
 from uuid import UUID
 
-from schemas.book import BookCreate, BookResponse, BookStatus
+from schemas.book import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
 from services.book import BookService
 from repository.book import BookRepository
 from database import get_db
@@ -14,10 +14,10 @@ def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
     repository = BookRepository(db)
     return BookService(repository)
 
-@router.get("/", response_model=List[BookResponse], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=PaginatedBookResponse, status_code=status.HTTP_200_OK)
 async def get_books(
-    skip: int = Query(0, ge=0, description="Пагінація: offset (зміщення)"),
-    limit: int = Query(10, ge=1, le=100, description="Пагінація: limit (скільки вибрати)"),
+    skip: int = Query(0, ge=0, description="Пагінація: offset "),
+    limit: int = Query(10, ge=1, le=100, description="Пагінація: limit "),
     status: Optional[BookStatus] = Query(None, description="Фільтр по статусу"),
     author: Optional[str] = Query(None, description="Фільтр по автору"),
     sort_by: Optional[str] = Query(None, description="Сортування ('title' або 'year')"),

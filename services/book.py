@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
 from repository.book import BookRepository
-from schemas.book import BookCreate, BookResponse, BookStatus
+from schemas.book import BookCreate, BookResponse, BookStatus, PaginatedBookResponse
 
 class BookService:
     def __init__(self, repository: BookRepository):
@@ -15,15 +15,21 @@ class BookService:
         status: Optional[BookStatus] = None, 
         author: Optional[str] = None,
         sort_by: Optional[str] = None
-    ) -> List[BookResponse]:
-        books = await self.repository.get_all(
+    ) -> PaginatedBookResponse:
+        total, books = await self.repository.get_all(
             skip=skip, 
             limit=limit, 
             status=status, 
             author=author,
             sort_by=sort_by
         )
-        return [BookResponse.model_validate(book) for book in books]
+        items = [BookResponse.model_validate(book) for book in books]
+        return PaginatedBookResponse(
+            total=total,
+            skip=skip,
+            limit=limit,
+            items=items
+        )
 
     async def get_book_by_id(self, book_id: UUID) -> BookResponse:
         book_data = await self.repository.get_by_id(book_id)
