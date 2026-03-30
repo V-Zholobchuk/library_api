@@ -3,7 +3,7 @@ from uuid import UUID
 import base64
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func, cast, String
+from sqlalchemy import select, delete, func
 from schemas.book_schemas import BookStatus
 from models.book_model import Book
 
@@ -25,10 +25,11 @@ class BookRepository:
         self, 
         limit: int = 100,
         cursor: Optional[str] = None,
+        is_prev: bool = False,
         status: Optional[BookStatus] = None, 
         author: Optional[str] = None,
         sort_by: Optional[str] = None
-    ) -> Tuple[int, List[Book], Optional[str]]:
+    ) -> Tuple[int, List[Book], Optional[str], Optional[str]]:
         base_query = select(Book)
         
         if status:
@@ -49,28 +50,41 @@ class BookRepository:
         cursor_data = decode_cursor(cursor) if cursor else None
         
         if sort_by == 'title':
-            query = query.order_by(Book.title, Book.id)
-            if cursor_data:
-                cursor_uuid = UUID(cursor_data['i'])
-                query = query.where(
-                    (Book.title > cursor_data['v']) | 
-                    ((Book.title == cursor_data['v']) & (Book.id > cursor_uuid))
-                )
+            col = Book.title
         elif sort_by == 'year':
-            query = query.order_by(Book.year, Book.id)
-            if cursor_data:
-                cursor_uuid = UUID(cursor_data['i'])
-                query = query.where(
-                    (Book.year > cursor_data['v']) | 
-                    ((Book.year == cursor_data['v']) & (Book.id > cursor_uuid))
-                )
+            col = Book.year
         else:
-            query = query.order_by(Book.id)
-            if cursor_data:
-                cursor_uuid = UUID(cursor_data['i'])
-                query = query.where(Book.id > cursor_uuid)
-                
-         
+            col = Book.id
+            
+        if is_prev:
+            if col is not Book.id:
+                query = query.order_by(col.desc(), Book.id.desc())
+                if cursor_data:
+                    cursor_uuid = UUID(cursor_data['i'])
+                    query = query.where(
+                        (col < cursor_data['v']) | 
+                        ((col == cursor_data['v']) & (Book.id < cursor_uuid))
+                    )
+            else:
+                query = query.order_by(Book.id.desc())
+                if cursor_data:
+                    cursor_uuid = UUID(cursor_data['i'])
+                    query = query.where(Book.id < cursor_uuid)
+        else:
+            if col is not Book.id:
+                query = query.order_by(col.asc(), Book.id.asc())
+                if cursor_data:
+                    cursor_uuid = UUID(cursor_data['i'])
+                    query = query.where(
+                        (col > cursor_data['v']) | 
+                        ((col == cursor_data['v']) & (Book.id > cursor_uuid))
+                    )
+            else:
+                query = query.order_by(Book.id.asc())
+                if cursor_data:
+                    cursor_uuid = UUID(cursor_data['i'])
+                    query = query.where(Book.id > cursor_uuid)
+
         query = query.limit(limit + 1)
         
         result = await self.session.execute(query)
@@ -80,18 +94,33 @@ class BookRepository:
         if has_more:
             books.pop()
             
-        next_cursor = None
-        if len(books) > 0 and has_more:
-            last_book = books[-1]
-            if sort_by == 'title':
-                val = last_book.title
-            elif sort_by == 'year':
-                val = last_book.year
-            else:
-                val = str(last_book.id)
-            next_cursor = encode_cursor(last_book.id, val)
+        if is_prev:
+            books.reverse()
             
-        return total, books, next_cursor
+        next_cursor = None
+        prev_cursor = None
+        
+        if len(books) > 0:
+            first_book = books[0]
+            last_book = books[-1]
+            
+            def make_cur(b: Book):
+                if sort_by == 'title': v = b.title
+                elif sort_by == 'year': v = b.year
+                else: v = str(b.id)
+                return encode_cursor(b.id, v)
+
+            if is_prev:
+                if has_more:
+                    prev_cursor = make_cur(first_book)
+                next_cursor = make_cur(last_book)
+            else:
+                if cursor:
+                    prev_cursor = make_cur(first_book)
+                if has_more:
+                    next_cursor = make_cur(last_book)
+                    
+        return total, books, next_cursor, prev_cursor
 
     async def get_by_id(self, book_id: UUID) -> Optional[Book]:
         return await self.session.get(Book, book_id)
