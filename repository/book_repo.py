@@ -49,23 +49,26 @@ class BookRepository:
         cursor_data = decode_cursor(cursor) if cursor else None
         
         if sort_by == 'title':
-            query = query.order_by(Book.title, cast(Book.id, String))
+            query = query.order_by(Book.title, Book.id)
             if cursor_data:
+                cursor_uuid = UUID(cursor_data['i'])
                 query = query.where(
                     (Book.title > cursor_data['v']) | 
-                    ((Book.title == cursor_data['v']) & (cast(Book.id, String) > cursor_data['i']))
+                    ((Book.title == cursor_data['v']) & (Book.id > cursor_uuid))
                 )
         elif sort_by == 'year':
-            query = query.order_by(Book.year, cast(Book.id, String))
+            query = query.order_by(Book.year, Book.id)
             if cursor_data:
+                cursor_uuid = UUID(cursor_data['i'])
                 query = query.where(
                     (Book.year > cursor_data['v']) | 
-                    ((Book.year == cursor_data['v']) & (cast(Book.id, String) > cursor_data['i']))
+                    ((Book.year == cursor_data['v']) & (Book.id > cursor_uuid))
                 )
         else:
-            query = query.order_by(cast(Book.id, String))
+            query = query.order_by(Book.id)
             if cursor_data:
-                query = query.where(cast(Book.id, String) > cursor_data['i'])
+                cursor_uuid = UUID(cursor_data['i'])
+                query = query.where(Book.id > cursor_uuid)
                 
          
         query = query.limit(limit + 1)
