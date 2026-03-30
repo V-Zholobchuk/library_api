@@ -132,3 +132,7 @@ async def test_pagination(async_client: AsyncClient):
     assert len(data["items"]) == 2
     assert data["items"][0]["title"] == "Book 2"
     assert data["items"][1]["title"] == "Book 3"
+    
+    # Перевіримо, чи з'явились лінки
+    assert "skip=4" in data["next_url"]
+    assert "skip=0" in data["prev_url"]
