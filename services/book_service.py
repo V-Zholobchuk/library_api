@@ -1,6 +1,5 @@
 from typing import List, Optional
 from uuid import UUID
-from fastapi import HTTPException, status
 from repository.book_repo import BookRepository
 from schemas.book_schemas import BookCreate, BookUpdate, BookResponse, BookStatus, PaginatedBookResponse
 
@@ -8,7 +7,7 @@ class BookService:
     def __init__(self, repository: BookRepository):
         self.repository = repository
 
-    async def get_all_books(
+    def get_all_books(
         self, 
         skip: int = 0,
         limit: int = 10,
@@ -18,7 +17,7 @@ class BookService:
         sort_desc: bool = False,
         search_query: Optional[str] = None
     ) -> PaginatedBookResponse:
-        total, books = await self.repository.get_all(
+        total, books = self.repository.get_all(
             skip=skip, 
             limit=limit, 
             status=status, 
@@ -31,26 +30,28 @@ class BookService:
             total=total,
             skip=skip,
             limit=limit,
+            next_url=None,
+            prev_url=None,
             items=[BookResponse.model_validate(book) for book in books]
         )
 
-    async def get_book_by_id(self, book_id: UUID) -> BookResponse:
-        book_data = await self.repository.get_by_id(book_id)
+    def get_book_by_id(self, book_id: UUID) -> Optional[BookResponse]:
+        book_data = self.repository.get_by_id(book_id)
         if not book_data:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Книгу не знайдено")
+            return None
         return BookResponse.model_validate(book_data)
 
-    async def create_book(self, book: BookCreate) -> BookResponse:
+    def create_book(self, book: BookCreate) -> BookResponse:
         book_dict = book.model_dump()
-        created_book = await self.repository.create(book_dict)
+        created_book = self.repository.create(book_dict)
         return BookResponse.model_validate(created_book)
 
-    async def update_book(self, book_id: UUID, book_update: BookUpdate) -> BookResponse:
+    def update_book(self, book_id: UUID, book_update: BookUpdate) -> Optional[BookResponse]:
         update_data = book_update.model_dump(exclude_unset=True)
-        updated_book = await self.repository.update(book_id, update_data)
+        updated_book = self.repository.update(book_id, update_data)
         if not updated_book:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Книгу не знайдено")
+            return None
         return BookResponse.model_validate(updated_book)
 
-    async def delete_book(self, book_id: UUID) -> None:
-        await self.repository.delete(book_id)
+    def delete_book(self, book_id: UUID) -> None:
+        self.repository.delete(book_id)

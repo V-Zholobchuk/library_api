@@ -1,13 +1,13 @@
 from typing import List, Optional, Tuple
 from uuid import UUID, uuid4
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.database import Database
 from schemas.book_schemas import BookStatus
 
 class BookRepository:
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: Database):
         self.collection = db.books
 
-    async def get_all(
+    def get_all(
         self, 
         skip: int = 0, 
         limit: int = 100,
@@ -18,6 +18,7 @@ class BookRepository:
         search_query: Optional[str] = None
     ) -> Tuple[int, List[dict]]:
         query = {}
+        
         if status:
             query["status"] = status
         if author:
@@ -29,9 +30,8 @@ class BookRepository:
                 {"author": {"$regex": search_query, "$options": "i"}}
             ]
             
-        total = await self.collection.count_documents(query)
-        
-        cursor = self.collection.find(query)
+        total = self.collection.count_documents(query)
+        cursor = self.collection.find(query, {"_id": 0})
         
         direction = -1 if sort_desc else 1
         
@@ -43,22 +43,22 @@ class BookRepository:
             cursor = cursor.sort("id", direction)
             
         cursor = cursor.skip(skip).limit(limit)
-        books = await cursor.to_list(length=limit)
+        books = list(cursor)
         
         return total, books
 
-    async def get_by_id(self, book_id: UUID) -> Optional[dict]:
-        return await self.collection.find_one({"id": str(book_id)})
+    def get_by_id(self, book_id: UUID) -> Optional[dict]:
+        return self.collection.find_one({"id": str(book_id)}, {"_id": 0})
 
-    async def create(self, book_data: dict) -> dict:
+    def create(self, book_data: dict) -> dict:
         book_data["id"] = str(uuid4())
-        await self.collection.insert_one(book_data)
+        self.collection.insert_one(book_data.copy())
         return book_data
 
-    async def update(self, book_id: UUID, update_data: dict) -> Optional[dict]:
+    def update(self, book_id: UUID, update_data: dict) -> Optional[dict]:
         if update_data:
-            await self.collection.update_one({"id": str(book_id)}, {"$set": update_data})
-        return await self.get_by_id(book_id)
+            self.collection.update_one({"id": str(book_id)}, {"$set": update_data})
+        return self.get_by_id(book_id)
 
-    async def delete(self, book_id: UUID) -> None:
-        await self.collection.delete_one({"id": str(book_id)})
+    def delete(self, book_id: UUID) -> None:
+        self.collection.delete_one({"id": str(book_id)})
