@@ -8,6 +8,7 @@ from repository.book_repo import BookRepository
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 router = APIRouter(prefix="/books", tags=["Books"])
 
 def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
@@ -17,22 +18,17 @@ def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
 @router.get("/", response_model=PaginatedBookResponse, status_code=status.HTTP_200_OK)
 async def get_books(
     request: Request,
-    skip: int = Query(0, ge=0, description="Пагінація: offset "),
+    cursor: Optional[str] = Query(None, description="Курсор для пагінації (base64)"),
     limit: int = Query(10, ge=1, le=100, description="Пагінація: limit "),
     status: Optional[BookStatus] = Query(None, description="Фільтр по статусу"),
     author: Optional[str] = Query(None, description="Фільтр по автору"),
     sort_by: Optional[str] = Query(None, description="Сортування ('title' або 'year')"),
     service: BookService = Depends(get_book_service)
 ):
-    result = await service.get_all_books(skip=skip, limit=limit, status=status, author=author, sort_by=sort_by)
+    result = await service.get_all_books(limit=limit, cursor=cursor, status=status, author=author, sort_by=sort_by)
     
-    if skip > 0:
-        prev_skip = max(0, skip - limit)
-        result.prev_url = str(request.url.include_query_params(skip=prev_skip, limit=limit))
-    
-    if skip + limit < result.total:
-        next_skip = skip + limit
-        result.next_url = str(request.url.include_query_params(skip=next_skip, limit=limit))
+    if result.next_cursor:
+        result.next_url = str(request.url.include_query_params(cursor=result.next_cursor, limit=limit))
         
     return result
 

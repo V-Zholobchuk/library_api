@@ -10,15 +10,15 @@ class BookService:
 
     async def get_all_books(
         self, 
-        skip: int = 0,
         limit: int = 10,
+        cursor: Optional[str] = None,
         status: Optional[BookStatus] = None, 
         author: Optional[str] = None,
         sort_by: Optional[str] = None
     ) -> PaginatedBookResponse:
-        total, books = await self.repository.get_all(
-            skip=skip, 
+        total, books, next_cursor = await self.repository.get_all(
             limit=limit, 
+            cursor=cursor,
             status=status, 
             author=author,
             sort_by=sort_by
@@ -26,8 +26,8 @@ class BookService:
         items = [BookResponse.model_validate(book) for book in books]
         return PaginatedBookResponse(
             total=total,
-            skip=skip,
             limit=limit,
+            next_cursor=next_cursor,
             items=items
         )
 

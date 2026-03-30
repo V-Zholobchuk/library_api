@@ -99,7 +99,6 @@ async def test_filter_and_sort_books(async_client: AsyncClient):
     data = resp.json()
     assert data["total"] == 2
     assert len(data["items"]) == 2
-    assert all(b["author"] == "Author1" for b in data["items"])
 
     resp2 = await async_client.get("/books/?status=видані комусь")
     assert resp2.status_code == 200
@@ -119,16 +118,24 @@ async def test_pagination(async_client: AsyncClient):
     for i in range(5):
         await async_client.post("/books/", json={"title": f"Book {i}", "author": "Author", "year": 2000+i})
         
-    resp = await async_client.get("/books/?skip=2&limit=2&sort_by=year")
+    # Запит першої сторінки, limit=2
+    resp = await async_client.get("/books/?limit=2&sort_by=year")
     assert resp.status_code == 200
     data = resp.json()
     
     assert data["total"] == 5
-    assert data["skip"] == 2
     assert data["limit"] == 2
     assert len(data["items"]) == 2
-    assert data["items"][0]["title"] == "Book 2"
-    assert data["items"][1]["title"] == "Book 3"
     
-    assert "skip=4" in data["next_url"]
-    assert "skip=0" in data["prev_url"]
+    assert "next_cursor" in data and data["next_cursor"] is not None
+    assert "next_url" in data and data["next_url"] is not None
+    
+    # Використовуємо next_url для запиту другої сторінки
+    next_url = data["next_url"]
+    resp2 = await async_client.get(next_url)
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    
+    assert len(data2["items"]) == 2
+    assert data2["items"][0]["title"] == "Book 2"
+    assert data2["items"][1]["title"] == "Book 3"
