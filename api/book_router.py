@@ -18,17 +18,24 @@ def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
 @router.get("/", response_model=PaginatedBookResponse, status_code=status.HTTP_200_OK)
 async def get_books(
     request: Request,
-    cursor: Optional[str] = Query(None, description="Курсор для пагінації"),
+    cursor: Optional[str] = Query(None, description="Курсор для пагінації "),
+    is_prev: bool = Query(False, description="Напрямок: назад (якщо true) чи вперед (якщо false)"),
     limit: int = Query(10, ge=1, le=100, description="Пагінація: limit "),
     status: Optional[BookStatus] = Query(None, description="Фільтр по статусу"),
     author: Optional[str] = Query(None, description="Фільтр по автору"),
     sort_by: Optional[str] = Query(None, description="Сортування ('title' або 'year')"),
     service: BookService = Depends(get_book_service)
 ):
-    result = await service.get_all_books(limit=limit, cursor=cursor, status=status, author=author, sort_by=sort_by)
+    result = await service.get_all_books(limit=limit, cursor=cursor, is_prev=is_prev, status=status, author=author, sort_by=sort_by)
     
     if result.next_cursor:
-        result.next_url = str(request.url.include_query_params(cursor=result.next_cursor, limit=limit))
+        result.next_url = str(request.url.include_query_params(cursor=result.next_cursor, is_prev=False, limit=limit))
+    else:
+        result.next_url = None
+    if result.prev_cursor:
+        result.prev_url = str(request.url.include_query_params(cursor=result.prev_cursor, is_prev=True, limit=limit))
+    else:
+        result.prev_url = None
         
     return result
 

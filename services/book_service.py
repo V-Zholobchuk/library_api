@@ -12,13 +12,15 @@ class BookService:
         self, 
         limit: int = 10,
         cursor: Optional[str] = None,
+        is_prev: bool = False,
         status: Optional[BookStatus] = None, 
         author: Optional[str] = None,
         sort_by: Optional[str] = None
     ) -> PaginatedBookResponse:
-        total, books, next_cursor = await self.repository.get_all(
+        total, books, next_cursor, prev_cursor = await self.repository.get_all(
             limit=limit, 
             cursor=cursor,
+            is_prev=is_prev,
             status=status, 
             author=author,
             sort_by=sort_by
@@ -28,6 +30,7 @@ class BookService:
             total=total,
             limit=limit,
             next_cursor=next_cursor,
+            prev_cursor=prev_cursor,
             items=items
         )
 

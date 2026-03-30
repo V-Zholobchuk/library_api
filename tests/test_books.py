@@ -139,3 +139,12 @@ async def test_pagination(async_client: AsyncClient):
     assert len(data2["items"]) == 2
     assert data2["items"][0]["title"] == "Book 2"
     assert data2["items"][1]["title"] == "Book 3"
+    
+    assert "prev_url" in data2 and data2["prev_url"] is not None
+    prev_url = data2["prev_url"]
+    resp3 = await async_client.get(prev_url)
+    assert resp3.status_code == 200
+    data3 = resp3.json()
+    
+    assert data3["items"][0]["title"] == "Book 0"
+    assert data3["items"][1]["title"] == "Book 1"

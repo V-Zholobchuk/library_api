@@ -25,6 +25,8 @@ class BookResponse(BookBase):
 class PaginatedBookResponse(BaseModel):
     total: int = Field(..., description="Загальна кількість книг, що відповідають запиту")
     limit: int
-    next_cursor: Optional[str] = Field(None, description="")
+    next_cursor: Optional[str] = Field(None, description="Курсор для наступної сторінки")
+    prev_cursor: Optional[str] = Field(None, description="Курсор для попередньої сторінки")
     next_url: Optional[str] = Field(None, description="URL наступної сторінки")
+    prev_url: Optional[str] = Field(None, description="URL попередньої сторінки")
     items: List[BookResponse]
