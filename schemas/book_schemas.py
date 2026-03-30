@@ -17,6 +17,13 @@ class BookBase(BaseModel):
 class BookCreate(BookBase):
     pass
 
+class BookUpdate(BaseModel):
+    title: Optional[str] = Field(None, description="Назва книги", min_length=1)
+    author: Optional[str] = Field(None, description="Автор книги", min_length=1)
+    description: Optional[str] = Field(None, description="Опис книги")
+    status: Optional[BookStatus] = Field(None, description="Статус книги")
+    year: Optional[int] = Field(None, description="Рік випуску", gt=0)
+
 class BookResponse(BookBase):
     id: UUID
 
@@ -24,9 +31,8 @@ class BookResponse(BookBase):
 
 class PaginatedBookResponse(BaseModel):
     total: int = Field(..., description="Загальна кількість книг, що відповідають запиту")
+    skip: int
     limit: int
-    next_cursor: Optional[str] = Field(None, description="Курсор для наступної сторінки")
-    prev_cursor: Optional[str] = Field(None, description="Курсор для попередньої сторінки")
     next_url: Optional[str] = Field(None, description="URL наступної сторінки")
     prev_url: Optional[str] = Field(None, description="URL попередньої сторінки")
     items: List[BookResponse]

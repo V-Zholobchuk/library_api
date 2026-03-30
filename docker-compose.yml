@@ -2,18 +2,14 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: lib_user
-      POSTGRES_PASSWORD: lib_pass
-      POSTGRES_DB: library_db
+    image: mongo:6.0
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongo_data:/data/db
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U lib_user -d library_db" ]
-      interval: 5s
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
       timeout: 5s
       retries: 5
 
@@ -22,10 +18,11 @@ services:
     ports:
       - "8080:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lib_user:lib_pass@db:5432/library_db
+      - MONGODB_URL=mongodb://db:27017
+      - MONGODB_DB_NAME=library_db
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
-  postgres_data:
+  mongo_data:

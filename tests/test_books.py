@@ -2,34 +2,23 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from uuid import uuid4
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.pool import StaticPool
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from main import app
-from database import get_db, Base
-from schemas.book_schemas import BookStatus
-
-TEST_DATABASE_URL = "sqlite+aiosqlite://"
-engine_test = create_async_engine(
-    TEST_DATABASE_URL, 
-    connect_args={"check_same_thread": False}, 
-    poolclass=StaticPool
-)
-TestingSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine_test, class_=AsyncSession)
+from database import get_db
 
 async def override_get_db():
-    async with TestingSessionLocal() as session:
-        yield session
+    client = AsyncIOMotorClient("mongodb://localhost:27017")
+    yield client["test_library_db"]
+    client.close()
 
 app.dependency_overrides[get_db] = override_get_db
 
 @pytest_asyncio.fixture(autouse=True)
 async def prepare_db():
-    async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    client = AsyncIOMotorClient("mongodb://localhost:27017")
+    await client["test_library_db"].books.delete_many({})
     yield
-    async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 @pytest_asyncio.fixture
 async def async_client():
@@ -99,6 +88,7 @@ async def test_filter_and_sort_books(async_client: AsyncClient):
     data = resp.json()
     assert data["total"] == 2
     assert len(data["items"]) == 2
+    assert all(b["author"] == "Author1" for b in data["items"])
 
     resp2 = await async_client.get("/books/?status=видані комусь")
     assert resp2.status_code == 200
@@ -118,33 +108,39 @@ async def test_pagination(async_client: AsyncClient):
     for i in range(5):
         await async_client.post("/books/", json={"title": f"Book {i}", "author": "Author", "year": 2000+i})
         
-    # Запит першої сторінки, limit=2
-    resp = await async_client.get("/books/?limit=2&sort_by=year")
+    resp = await async_client.get("/books/?skip=2&limit=2&sort_by=year")
     assert resp.status_code == 200
     data = resp.json()
     
     assert data["total"] == 5
+    assert data["skip"] == 2
     assert data["limit"] == 2
     assert len(data["items"]) == 2
+    assert data["items"][0]["title"] == "Book 2"
+    assert data["items"][1]["title"] == "Book 3"
+
+
+@pytest.mark.asyncio
+async def test_update_book(async_client: AsyncClient):
+    create_resp = await async_client.post("/books/", json={"title": "Original", "author": "Author", "year": 2000})
+    book_id = create_resp.json()["id"]
     
-    assert "next_cursor" in data and data["next_cursor"] is not None
-    assert "next_url" in data and data["next_url"] is not None
+    patch_resp = await async_client.patch(f"/books/{book_id}", json={"title": "Updated Title"})
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["title"] == "Updated Title"
+    assert patch_resp.json()["author"] == "Author"
+
+@pytest.mark.asyncio
+async def test_search_and_desc_sort(async_client: AsyncClient):
+    await async_client.post("/books/", json={"title": "Harry Potter", "author": "J.K. Rowling", "year": 1997})
+    await async_client.post("/books/", json={"title": "Lord of the Rings", "author": "J.R.R. Tolkien", "year": 1954})
     
-    # Використовуємо next_url для запиту другої сторінки
-    next_url = data["next_url"]
-    resp2 = await async_client.get(next_url)
-    assert resp2.status_code == 200
-    data2 = resp2.json()
+    # Search test
+    resp = await async_client.get("/books/?search_query=harry")
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) == 1
+    assert resp.json()["items"][0]["title"] == "Harry Potter"
     
-    assert len(data2["items"]) == 2
-    assert data2["items"][0]["title"] == "Book 2"
-    assert data2["items"][1]["title"] == "Book 3"
-    
-    assert "prev_url" in data2 and data2["prev_url"] is not None
-    prev_url = data2["prev_url"]
-    resp3 = await async_client.get(prev_url)
-    assert resp3.status_code == 200
-    data3 = resp3.json()
-    
-    assert data3["items"][0]["title"] == "Book 0"
-    assert data3["items"][1]["title"] == "Book 1"
+    # Desc sort test
+    resp2 = await async_client.get("/books/?sort_by=year&sort_desc=true")
+    assert resp2.json()["items"][0]["year"] == 1997
