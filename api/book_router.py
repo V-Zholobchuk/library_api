@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from api.auth_router import get_current_user
 from rate_limiter import rate_limit
 
-router = APIRouter(prefix="/books", tags=["Books"], dependencies=[Depends(rate_limit)])
+router = APIRouter(prefix="/books", tags=["Books"])
 
 def get_book_service(db: AsyncIOMotorDatabase = Depends(get_db)) -> BookService:
     repository = BookRepository(db)

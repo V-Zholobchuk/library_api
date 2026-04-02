@@ -19,6 +19,16 @@ services:
     volumes:
       - ./openapi.json:/api/openapi.json:ro
 
+  locust:
+    image: locustio/locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: -f /mnt/locust/locustfile.py --host http://web:8000
+    depends_on:
+      - web
+
   redis:
     image: redis:alpine
     ports:
