@@ -11,6 +11,11 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
   web:
     build: .
     ports:
@@ -18,9 +23,12 @@ services:
     environment:
       - MONGODB_URL=mongodb://db:27017
       - MONGODB_DB_NAME=library_db
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   mongo_data:

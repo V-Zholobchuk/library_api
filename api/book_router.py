@@ -8,8 +8,9 @@ from repository.book_repo import BookRepository
 from database import get_db
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from api.auth_router import get_current_user
+from rate_limiter import rate_limit
 
-router = APIRouter(prefix="/books", tags=["Books"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/books", tags=["Books"], dependencies=[Depends(rate_limit)])
 
 def get_book_service(db: AsyncIOMotorDatabase = Depends(get_db)) -> BookService:
     repository = BookRepository(db)
@@ -49,14 +50,14 @@ async def get_book(
 ):
     return await service.get_book_by_id(book_id)
 
-@router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
 async def create_book(
     book: BookCreate,
     service: BookService = Depends(get_book_service)
 ):
     return await service.create_book(book)
 
-@router.patch("/{book_id}", response_model=BookResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{book_id}", response_model=BookResponse, status_code=status.HTTP_200_OK, dependencies=[Depends(get_current_user)])
 async def update_book(
     book_id: UUID,
     book_update: BookUpdate,
@@ -64,7 +65,7 @@ async def update_book(
 ):
     return await service.update_book(book_id, book_update)
 
-@router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
 async def delete_book(
     book_id: UUID,
     service: BookService = Depends(get_book_service)

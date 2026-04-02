@@ -6,6 +6,26 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from main import app
 from database import get_db
+from unittest.mock import AsyncMock, patch
+
+class MockRedis:
+    def __init__(self):
+        self.data = {}
+    async def zremrangebyscore(self, key, min, max):
+        if key in self.data:
+            self.data[key] = {k: v for k, v in self.data[key].items() if v > max}
+    async def zcard(self, key):
+        return len(self.data.get(key, {}))
+    async def zadd(self, key, mapping):
+        if key not in self.data:
+            self.data[key] = {}
+        self.data[key].update(mapping)
+    async def expire(self, key, time):
+        pass
+    async def flushdb(self):
+        self.data = {}
+        
+mock_redis_client = MockRedis()
 
 async def override_get_db():
     client = AsyncIOMotorClient("mongodb://localhost:27017")
@@ -19,7 +39,9 @@ async def prepare_db():
     client = AsyncIOMotorClient("mongodb://localhost:27017")
     await client["test_library_db"].books.delete_many({})
     await client["test_library_db"].users.delete_many({})
-    yield
+    with patch("rate_limiter.redis_client", mock_redis_client):
+        await mock_redis_client.flushdb()
+        yield
     client.close()
 
 @pytest_asyncio.fixture
@@ -148,6 +170,25 @@ async def test_search_and_desc_sort(async_client: AsyncClient, auth_headers: dic
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 1
     assert resp.json()["items"][0]["title"] == "Harry Potter"
-    
     resp2 = await async_client.get("/books/?sort_by=year&sort_desc=true", headers=auth_headers)
     assert resp2.json()["items"][0]["year"] == 1997
+
+@pytest.mark.asyncio
+async def test_rate_limit_anonymous(async_client: AsyncClient):
+    resp1 = await async_client.get("/books/")
+    assert resp1.status_code == 200
+    
+    resp2 = await async_client.get("/books/")
+    assert resp2.status_code == 200
+    
+    resp3 = await async_client.get("/books/")
+    assert resp3.status_code == 429
+
+@pytest.mark.asyncio
+async def test_rate_limit_authenticated(async_client: AsyncClient, auth_headers: dict):
+    for _ in range(10):
+        resp = await async_client.get("/books/", headers=auth_headers)
+        assert resp.status_code == 200
+        
+    resp_limit = await async_client.get("/books/", headers=auth_headers)
+    assert resp_limit.status_code == 429
