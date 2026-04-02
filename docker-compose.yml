@@ -11,6 +11,14 @@ services:
       timeout: 5s
       retries: 5
 
+  prism:
+    image: stoplight/prism:5
+    ports:
+      - "4010:4010"
+    command: mock -h 0.0.0.0 /api/openapi.json
+    volumes:
+      - ./openapi.json:/api/openapi.json:ro
+
   redis:
     image: redis:alpine
     ports:
