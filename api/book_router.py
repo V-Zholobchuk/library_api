@@ -7,8 +7,9 @@ from services.book_service import BookService
 from repository.book_repo import BookRepository
 from database import get_db
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from api.auth_router import get_current_user
 
-router = APIRouter(prefix="/books", tags=["Books"])
+router = APIRouter(prefix="/books", tags=["Books"], dependencies=[Depends(get_current_user)])
 
 def get_book_service(db: AsyncIOMotorDatabase = Depends(get_db)) -> BookService:
     repository = BookRepository(db)
